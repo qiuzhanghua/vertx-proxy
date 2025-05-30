@@ -1,6 +1,9 @@
 .vscode/
 .idea/
 
+
+.env
+
 ### Vert.x ###
 .vertx/
 
