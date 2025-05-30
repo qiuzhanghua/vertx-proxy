@@ -14,6 +14,20 @@ gradle clean package
 
 ## Run
 
+### Set the API Key
+
+create a file named `.env` in the root directory of the project and add the following lines to it:
+
+```text
+# use static keys for test only
+# SECURE_PROXY_WITH_STATIC=True
+# SECURE_PROXY_STATIC_MAP=key1=user1,key2=user2
+SECURE_PROXY_WITH_REDIS=True
+REDIS_URL=redis://localhost:6379/0
+SECURE_PROXY_TARGET=http://localhost
+SECURE_PROXY_PORT=8080
+```
+
 ```bash
 gradle clean run
 ```

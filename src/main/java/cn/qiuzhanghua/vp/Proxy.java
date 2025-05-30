@@ -23,25 +23,55 @@ public class Proxy extends VerticleBase {
 
     Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
 
-    String redisUrl = dotenv.get("REDIS_URL", "redis://localhost:6379/0");
-    RedisOptions options = new RedisOptions();
-    options.setConnectionString(redisUrl);
-    Redis redisClient = Redis.createClient(vertx, options);
-    RedisAPI api = RedisAPI.api(redisClient);
-    redisClient.connect().onSuccess(conn -> {
-      logger.info("Connected to Redis");
-    }).onFailure(err -> {
-      logger.error("Failed to connect to Redis: " + err.getMessage());
-    });
+    String withRedisString = dotenv.get("SECURE_PROXY_WITH_REDIS", "false");
+    boolean withRedis = false;
+    RedisAPI api;
+
+    withRedisString = withRedisString.toLowerCase();
+    if (withRedisString == "true") {
+      withRedis = true;
+      String redisUrl = dotenv.get("REDIS_URL", "redis://localhost:6379/0");
+      RedisOptions options = new RedisOptions();
+      options.setConnectionString(redisUrl);
+      Redis redisClient = Redis.createClient(vertx, options);
+      api = RedisAPI.api(redisClient);
+      redisClient.connect().onSuccess(conn -> {
+        logger.info("Connected to Redis");
+      }).onFailure(err -> {
+        logger.error("Failed to connect to Redis: " + err.getMessage());
+      });
+    }
+
+    String proxyTarget = dotenv.get("SECURE_PROXY_TARGET", "http://localhost:11435");
+    if (proxyTarget.startsWith("http://") || proxyTarget.startsWith("https://")) {
+      proxyTarget = proxyTarget.substring(proxyTarget.indexOf("://") + 3);
+    }
+    int port = 11435;
+    String host = "localhost";
+
+    String[] result = proxyTarget.split(":");
+    if (result.length > 2) {
+      logger.error(proxyTarget + " Error, check your SECURE_PROXY_TARGET");
+    } else if (result.length == 2) {
+      host = result[0];
+      port = Integer.parseInt(result[1]);
+    } else {
+      host = proxyTarget;
+    }
+
+    logger.info("Proxy target: " + proxyTarget);
+
+    String exposedPortString = dotenv.get("SECURE_PROXY_PORT", "11434");
+    int exposedPort = Integer.parseInt(exposedPortString);
 
     HttpClient proxyClient = vertx.createHttpClient();
     HttpProxy proxy = HttpProxy.reverseProxy(new ProxyOptions().setSupportWebSocket(true), proxyClient);
-    proxy.origin(11435, "localhost");
+    proxy.origin(port, host);
     HttpServer proxyServer = vertx.createHttpServer();
 
-    return proxyServer.requestHandler(proxy).listen(11434)
+    return proxyServer.requestHandler(proxy).listen(exposedPort)
         .onSuccess(server -> {
-          logger.info("Proxy server started on port 11434");
+          logger.info("Proxy server started on port {}", exposedPort);
         })
         .onFailure(err -> {
           logger.error("Failed to start proxy server: " + err.getMessage());
