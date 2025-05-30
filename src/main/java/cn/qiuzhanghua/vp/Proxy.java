@@ -13,14 +13,19 @@ import io.vertx.redis.client.RedisOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.github.cdimascio.dotenv.Dotenv;
+
 public class Proxy extends VerticleBase {
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
 
   @Override
   public Future<?> start() {
 
+    Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
+
+    String redisUrl = dotenv.get("REDIS_URL", "redis://localhost:6379/0");
     RedisOptions options = new RedisOptions();
-    options.setConnectionString("redis://localhost:6379/0");
+    options.setConnectionString(redisUrl);
     Redis redisClient = Redis.createClient(vertx, options);
     RedisAPI api = RedisAPI.api(redisClient);
     redisClient.connect().onSuccess(conn -> {

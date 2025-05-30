@@ -25,6 +25,7 @@ application {
 }
 
 dependencies {
+  implementation("io.github.cdimascio:dotenv-java:3.2.0")
   implementation(platform("io.vertx:vertx-stack-depchain:$vertxVersion"))
   implementation("io.vertx:vertx-launcher-application")
   implementation("io.vertx:vertx-http-proxy")
