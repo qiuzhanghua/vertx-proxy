@@ -1,22 +1,29 @@
 package cn.qiuzhanghua.vp;
 
-import io.vertx.core.Future;
-import io.vertx.core.VerticleBase;
-import io.vertx.core.http.HttpClient;
-import io.vertx.core.http.HttpServer;
-import io.vertx.httpproxy.HttpProxy;
-import io.vertx.httpproxy.ProxyOptions;
-
-import io.vertx.redis.client.Redis;
-import io.vertx.redis.client.RedisAPI;
-import io.vertx.redis.client.RedisOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import io.vertx.core.Future;
+import io.vertx.core.VerticleBase;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpServer;
+import io.vertx.httpproxy.Body;
+import io.vertx.httpproxy.HttpProxy;
+import io.vertx.httpproxy.ProxyContext;
+import io.vertx.httpproxy.ProxyInterceptor;
+import io.vertx.httpproxy.ProxyOptions;
+import io.vertx.httpproxy.ProxyRequest;
+import io.vertx.httpproxy.ProxyResponse;
+import io.vertx.redis.client.Redis;
+import io.vertx.redis.client.RedisAPI;
+import io.vertx.redis.client.RedisOptions;
 
 public class Proxy extends VerticleBase {
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
+
+  RedisAPI api = null;
 
   @Override
   public Future<?> start() {
@@ -25,10 +32,9 @@ public class Proxy extends VerticleBase {
 
     String withRedisString = dotenv.get("SECURE_PROXY_WITH_REDIS", "false");
     boolean withRedis = false;
-    RedisAPI api;
 
     withRedisString = withRedisString.toLowerCase();
-    if (withRedisString == "true") {
+    if ("true".equals(withRedisString)) {
       withRedis = true;
       String redisUrl = dotenv.get("REDIS_URL", "redis://localhost:6379/0");
       RedisOptions options = new RedisOptions();
@@ -67,6 +73,33 @@ public class Proxy extends VerticleBase {
     HttpClient proxyClient = vertx.createHttpClient();
     HttpProxy proxy = HttpProxy.reverseProxy(new ProxyOptions().setSupportWebSocket(true), proxyClient);
     proxy.origin(port, host);
+
+    proxy.addInterceptor(new ProxyInterceptor() {
+      @Override
+      public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+
+        ProxyRequest proxyRequest = context.request();
+
+        String authorization = proxyRequest.headers().get("Authorization");
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+          logger.warn("Unauthorized request: Missing or invalid Authorization header");
+          proxyRequest.release();
+          ProxyResponse unauthorizedResponse = proxyRequest.response()
+              .setStatusCode(401)
+              .putHeader("content-type", "text/plain")
+              .setBody(Body.body(Buffer.buffer("Unauthorized request")));
+          return Future.succeededFuture(unauthorizedResponse);
+        }
+        String token = authorization.substring(7); // Remove "Bearer " prefix
+        logger.info("Received token: {}", token);
+        // logger.info("redis api: {}", api);
+
+        proxyRequest.headers().remove("Authorization");
+        return ProxyInterceptor.super.handleProxyRequest(context);
+
+      }
+    });
+
     HttpServer proxyServer = vertx.createHttpServer();
 
     return proxyServer.requestHandler(proxy).listen(exposedPort)
