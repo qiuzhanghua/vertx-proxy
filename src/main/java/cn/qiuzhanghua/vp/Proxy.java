@@ -31,9 +31,15 @@ public class Proxy extends VerticleBase {
 
     HttpClient proxyClient = vertx.createHttpClient();
     HttpProxy proxy = HttpProxy.reverseProxy(new ProxyOptions().setSupportWebSocket(true), proxyClient);
-    proxy.origin(11434, "localhost");
+    proxy.origin(11435, "localhost");
     HttpServer proxyServer = vertx.createHttpServer();
 
-    return proxyServer.requestHandler(proxy).listen(8080);
+    return proxyServer.requestHandler(proxy).listen(11434)
+        .onSuccess(server -> {
+          logger.info("Proxy server started on port 11434");
+        })
+        .onFailure(err -> {
+          logger.error("Failed to start proxy server: " + err.getMessage());
+        });
   }
 }
